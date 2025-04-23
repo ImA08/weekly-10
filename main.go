@@ -208,7 +208,7 @@ func main() {
 			if strings.ToLower(movie.Title) == movieQ || slices.Equal(movie.Genres, genresQ) {
 				ctx.JSON(http.StatusOK, gin.H{
 					"status": "success",
-					"data":   mockMovies,
+					"data":   movie,
 				})
 
 			}
