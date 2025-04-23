@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func main() {
 		ReleaseDate time.Time `json:"release_date"`
 		PosterURL   string    `json:"poster_url"`
 		Duration    int       `json:"duration"` // dalam menit
-		Genres       []string    `json:"genres"`
+		Genres      []string  `json:"genres"`
 		Rating      float32   `json:"rating"`
 	}
 
@@ -112,7 +113,7 @@ func main() {
 			ReleaseDate: time.Now().AddDate(0, 3, 0), // 3 bulan dari sekarang
 			PosterURL:   "https://example.com/posters/avengers.jpg",
 			Duration:    150,
-			Genres:       []string{"Action", "Drama"},
+			Genres:      []string{"Action", "Drama"},
 			Rating:      4.5,
 		},
 		{
@@ -122,7 +123,7 @@ func main() {
 			ReleaseDate: time.Now().AddDate(0, 2, 15), // 2 bulan 15 hari dari sekarang
 			PosterURL:   "https://example.com/posters/dune2.jpg",
 			Duration:    165,
-			Genres:       []string{"Sci-Fi","Action"},
+			Genres:      []string{"Sci-Fi", "Action"},
 			Rating:      4.5,
 		},
 		{
@@ -132,7 +133,7 @@ func main() {
 			ReleaseDate: time.Now().AddDate(0, 5, 0), // 5 bulan dari sekarang
 			PosterURL:   "https://example.com/posters/batman2.jpg",
 			Duration:    180,
-			Genres:       []string{"Action","Drama"},
+			Genres:      []string{"Action", "Drama"},
 			Rating:      2.9,
 		},
 	}
@@ -193,7 +194,7 @@ func main() {
 
 	r.GET("/tickitz/movies", func(ctx *gin.Context) {
 		movieQ := ctx.Query("movie")
-		genresQ := ctx.Query("genres")
+		genresQ := []string{ctx.Query("genres")}
 
 		if movieQ == "" {
 			ctx.JSON(http.StatusOK, gin.H{
@@ -202,17 +203,18 @@ func main() {
 			})
 			return
 		}
-		
 
 		for _, movie := range mockMovies {
-			if strings.ToLower(movie.Title) == movieQ {
-				for genre := movie.Genres {
-					if  strings
-				}
-			}
+			if strings.ToLower(movie.Title) == movieQ || slices.Equal(movie.Genres, genresQ) {
+				ctx.JSON(http.StatusOK, gin.H{
+					"status": "success",
+					"data":   mockMovies,
+				})
 
 			}
-		
+
+		}
+
 	})
 
 	r.Run()
