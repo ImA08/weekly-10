@@ -2,8 +2,6 @@ package main
 
 import (
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,7 +12,7 @@ func main() {
 
 	type userStruct struct {
 		Email    string `json:"email" form:"email"`
-		Password string `json:"password" form:"passwors"`
+		Password string `json:"password" form:"password"`
 	}
 
 	users := []userStruct{
@@ -124,7 +122,7 @@ func main() {
 			PosterURL:   "https://example.com/posters/dune2.jpg",
 			Duration:    165,
 			Genres:      []string{"Sci-Fi", "Action"},
-			Rating:      4.5,
+			Rating:      2.9,
 		},
 		{
 			ID:          3,
@@ -134,7 +132,7 @@ func main() {
 			PosterURL:   "https://example.com/posters/batman2.jpg",
 			Duration:    180,
 			Genres:      []string{"Action", "Drama"},
-			Rating:      2.9,
+			Rating:      4.8,
 		},
 	}
 
@@ -183,6 +181,7 @@ func main() {
 				"status":  "succes",
 				"message": "Movie tidak ditemukan",
 			})
+			return
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{
@@ -204,16 +203,16 @@ func main() {
 			return
 		}
 
-		for _, movie := range mockMovies {
-			if strings.ToLower(movie.Title) == movieQ || slices.Equal(movie.Genres, genresQ) {
-				ctx.JSON(http.StatusOK, gin.H{
-					"status": "success",
-					"data":   movie,
-				})
+		// for _, movie := range mockMovies {
+		// 	movie.Genres = strings.ToLower(movie.Genres)
+		// 	if strings.ToLower(movie.Title) == strings.ToLower(movieQ) || slices.Equal(movie.Genres, genresQ) {
+		// 		ctx.JSON(http.StatusOK, gin.H{
+		// 			"status": "success",
+		// 			"data":   movie,
+		// 		})
+		// 	}
 
-			}
-
-		}
+		// }
 
 	})
 
