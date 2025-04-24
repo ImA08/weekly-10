@@ -1,12 +1,38 @@
 package router
 
 import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/joho/godotenv/autoload"
 )
 
 var r = gin.Default()
 
 func main() {
+
+	dbEnv := []any{}
+	dbEnv = append(dbEnv, os.Getenv("DBUSER"))
+	dbEnv = append(dbEnv, os.Getenv("DBPASS"))
+	dbEnv = append(dbEnv, os.Getenv("DBHOST"))
+	dbEnv = append(dbEnv, os.Getenv("DBPORT"))
+	dbEnv = append(dbEnv, os.Getenv("DBNAME"))
+
+	dbString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbEnv...)
+	dbClient, err := pgxpool.New(context.Background(), dbString)
+	if err != nil {
+		log.Printf("Unable to create connection pool : %v/n", err)
+		os.Exit(1)
+	}
+
+	defer func() {
+		log.Println("Closing DB...")
+		dbClient.Close()
+	}()
 
 	v1 := r.Group(("/api/v1"))
 
