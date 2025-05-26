@@ -30,8 +30,21 @@ func (h *MovieHandler) GetMovies(ctx *gin.Context) {
 		return
 	}
 
+	// Filter parameters
+	title := ctx.Query("title")
+	genre := ctx.Query("genre")
+
+	filters := map[string]any{}
+	if title != "" {
+		filters["title"] = title
+	}
+	if genre != "" {
+		filters["genre"] = genre
+	}
+
 	var movies models.ShowMovie
-	result, err := h.movieRepo.GetAllMovies(ctx.Request.Context(), movies, page)
+
+	result, err := h.movieRepo.GetAllMovies(ctx.Request.Context(), movies, page, filters)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to fetch movies",
