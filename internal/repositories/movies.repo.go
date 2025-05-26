@@ -14,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"minitask1.go/internal/models"
-	"minitask1.go/internal/utils"
 )
 
 type MoviesRepository struct {
@@ -34,101 +33,8 @@ const (
 	CacheKeyUpcomingMovies = "movies:upcoming"
 )
 
-// func (r *MoviesRepository) GetAllMovies(ctx context.Context, filterBy models.ShowMovie, page int) ([]models.ShowMovie, error) {
-// 	cacheKey := fmt.Sprintf(CacheKeyAllMovies, page)
-
-// 	// 1. Try getting from Redis first
-// 	cached, err := r.rdb.Get(ctx, cacheKey).Result()
-// 	if err == nil {
-// 		var movies []models.ShowMovie
-// 		if err := json.Unmarshal([]byte(cached), &movies); err == nil {
-// 			return movies, nil
-// 		}
-// 	}
-
-// 	// 2. Query from database if cache miss
-// 	const limit = 4
-// 	offset := (page - 1) * limit
-
-// 	query := `SELECT
-// 			id,
-// 			title,
-// 			poster_path,
-// 			genres
-// 		FROM (
-// 			SELECT
-// 				m.id,
-// 				m.title,
-// 				m.synopsis,
-// 				m.poster_path,
-// 				ARRAY_AGG(DISTINCT g.genre) AS genres
-// 			FROM movies m
-// 			LEFT JOIN movie_genres mg ON mg.movie_id = m.id
-// 			LEFT JOIN genres g ON mg.genre_id = g.id
-// 			GROUP BY m.id
-// 			ORDER BY m.id
-// 			LIMIT 12 OFFSET $1
-// 	) sq WHERE`
-
-// 	values := []any{}
-// 	if filterBy.Id > 0 {
-// 		query += fmt.Sprintf(`id = $%d`, len(values)+1)
-// 		values = append(values, filterBy.Id)
-// 	}
-
-// 	if filterBy.Title != "" {
-// 		query += fmt.Sprintf(`LOWER(sq.title) LIKE '%%' || LOWER($%d) || '%%'`, len(values)+1)
-// 		values = append(values, filterBy.Title)
-// 	}
-
-// 	if len(filterBy.Genres) > 0 {
-// 		if len(values) > 0 {
-// 			query += " AND "
-// 		}
-// 		query += "("
-// 		for i, genre := range filterBy.Genres {
-// 			if i > 0 {
-// 				query += " OR "
-// 			}
-// 			query += fmt.Sprintf(`LOWER(ARRAY_TO_STRING(sq.genres, ',')) LIKE '%%' || LOWER($%d) || '%%'`, len(values)+1)
-// 			values = append(values, genre)
-// 		}
-// 		query += ")"
-// 	}
-
-// 	rows, err := r.db.Query(ctx, query, values, limit, offset)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("db query failed: %w", err)
-// 	}
-// 	defer rows.Close()
-
-// 	var movies []models.ShowMovie
-// 	for rows.Next() {
-// 		var movie models.ShowMovie
-// 		if err := rows.Scan(
-// 			&movie.Id,
-// 			&movie.Title,
-// 			&movie.Image,
-// 			&movie.Genres,
-
-// 		); err != nil {
-// 			return nil, fmt.Errorf("db scan failed: %w", err)
-// 		}
-// 		movies = append(movies, movie)
-// 	}
-
-// 	// 3. Cache the results
-// 	if jsonData, err := json.Marshal(movies); err == nil {
-// 		if err := r.rdb.Set(ctx, cacheKey, jsonData, MoviesCacheDuration).Err(); err != nil {
-// 			fmt.Printf("Failed to cache movies: %v\n", err)
-// 		}
-// 	}wok
-
-// 	return movies, nil
-// }
-
-func (r *MoviesRepository) GetAllMovies(ctx context.Context, filterBy models.ShowMovie, page int) ([]models.ShowMovie, error) {
-	cacheKey := fmt.Sprintf("movies:%d:%v", page, filterBy)
+func (r *MoviesRepository) GetAllMovies(ctx context.Context, movie models.ShowMovie, page int, filterBy map[string]any) ([]models.ShowMovie, error) {
+	cacheKey := fmt.Sprintf("movies:%d:%v", page, movie)
 
 	// 1. Try Redis cache first
 	if cached, err := r.rdb.Get(ctx, cacheKey).Result(); err == nil {
@@ -154,30 +60,51 @@ func (r *MoviesRepository) GetAllMovies(ctx context.Context, filterBy models.Sho
 
 	var filters []string
 	var values []interface{}
+	paramCount := 1
 
-	// ID filter
-	if filterBy.Id > 0 {
-		filters = append(filters, fmt.Sprintf("m.id = $%d", len(values)+1))
-		values = append(values, filterBy.Id)
+	// Apply filters
+	for key, value := range filterBy {
+		switch key {
+		case "title":
+			filters = append(filters, fmt.Sprintf("LOWER(m.title) LIKE '%%' || LOWER($%d) || '%%'", paramCount))
+			values = append(values, value.(string))
+			paramCount++
+		case "genre":
+			filters = append(filters, fmt.Sprintf(`
+                EXISTS (
+                    SELECT 1 FROM movie_genres mg2
+                    JOIN genres g2 ON mg2.genre_id = g2.id
+                    WHERE mg2.movie_id = m.id
+                    AND LOWER(g2.genre) = LOWER($%d)
+                )`, paramCount))
+			values = append(values, value.(string))
+			paramCount++
+		}
 	}
 
-	// Title filter
-	if filterBy.Title != "" {
-		filters = append(filters, fmt.Sprintf("LOWER(m.title) LIKE '%%' || $%d || '%%'", len(values)+1))
-		values = append(values, strings.ToLower(filterBy.Title))
-	}
+	// // ID filter
+	// if movie.Id > 0 {
+	// 	filters = append(filters, fmt.Sprintf("m.id = $%d", len(values)+1))
+	// 	values = append(values, movie.Id)
+	// }
 
-	// Genre filter (using pgx array support)
-	if len(filterBy.Genres) > 0 {
-		filters = append(filters, fmt.Sprintf(
-			`EXISTS (
-				SELECT 1 FROM movie_genres mg2
-				JOIN genres g2 ON mg2.genre_id = g2.id
-				WHERE mg2.movie_id = m.id
-				AND LOWER(g2.genre) = ANY($%d)
-			)`, len(values)+1))
-		values = append(values, utils.LowerCaseStrings(filterBy.Genres))
-	}
+	// // Title filter
+	// if movie.Title != "" {
+	// 	filters = append(filters, fmt.Sprintf("LOWER(m.title) LIKE '%%' || $%d || '%%'", len(values)+1))
+	// 	values = append(values, strings.ToLower(movie.Title))
+	// }
+
+	// // Genre filter (using pgx array support)
+	// if len(movie.Genres) > 0 {
+	// 	filters = append(filters, fmt.Sprintf(
+	// 		`EXISTS (
+	// 			SELECT 1 FROM movie_genres mg2
+	// 			JOIN genres g2 ON mg2.genre_id = g2.id
+	// 			WHERE mg2.movie_id = m.id
+	// 			AND LOWER(g2.genre) = ANY($%d)
+	// 		)`, len(values)+1))
+	// 	values = append(values, utils.LowerCaseStrings(movie.Genres))
+	// }
 
 	// Combine query parts
 	query := baseQuery
@@ -192,7 +119,7 @@ func (r *MoviesRepository) GetAllMovies(ctx context.Context, filterBy models.Sho
 		OFFSET $` + fmt.Sprint(len(values)+2)
 	values = append(values, limit, offset)
 
-	// 3. Execute query (using pgx)
+	// 3. Execute query
 	rows, err := r.db.Query(ctx, query, values...)
 	if err != nil {
 		return nil, fmt.Errorf("db query failed: %w", err)
@@ -206,7 +133,7 @@ func (r *MoviesRepository) GetAllMovies(ctx context.Context, filterBy models.Sho
 			&movie.Id,
 			&movie.Title,
 			&movie.Image,
-			&movie.Genres, // pgx automatically scans arrays into slices
+			&movie.Genres,
 		); err != nil {
 			return nil, fmt.Errorf("db scan failed: %w", err)
 		}
@@ -316,7 +243,7 @@ func (r *MoviesRepository) AddMovies(ctx context.Context, dataMovie models.Movie
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
 		dataMovie.Title, dataMovie.Synopsis, dataMovie.Duration,
 		dataMovie.ReleaseDate, posterPath, backdropPath,
-	).Scan(&movieId) // Fixed: using pointer
+	).Scan(&movieId)
 	if err != nil {
 		return fmt.Errorf("failed to insert movie: %w", err)
 	}
@@ -417,113 +344,6 @@ func (r *MoviesRepository) AddMovies(ctx context.Context, dataMovie models.Movie
 
 	return nil
 }
-
-// func (r *MoviesRepository) AddMovies(ctx context.Context, dataMovie models.DetailMovieStruct, posterPath, backdropPath string) error {
-
-// 	queryMovie := `INSERT INTO movies (title, synopsis, duration, release_date, poster_path, backdrop_path)
-// 			VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
-// 	var movieId int
-// 	movieValues := []any{dataMovie.Title, dataMovie.Synopsis, dataMovie.Duration, dataMovie.ReleaseDate, posterPath, backdropPath}
-// 	if err := r.db.QueryRow(ctx, queryMovie, movieValues...).Scan(movieId); err != nil {
-// 		return err
-// 	}
-
-// 	// check cast if exist, and insert if itsn't
-// 	for _, castName := range dataMovie.Casts {
-// 		var castID int
-
-// 		// Check if cast exists
-// 		err := r.db.QueryRow(ctx, `SELECT id FROM casts WHERE name = $1 LIMIT 1`, castName).Scan(&castID)
-
-// 		if err != nil {
-// 			if errors.Is(err, pgx.ErrNoRows) {
-// 				// Insert new cast member
-// 				err = r.db.QueryRow(
-// 					ctx,
-// 					`INSERT INTO casts (name) VALUES ($1) RETURNING id`,
-// 					castName,
-// 				).Scan(&castID)
-
-// 				if err != nil {
-// 					// return fmt.Errorf("failed to insert cast %s: %w", castName, err)
-// 					return err
-// 				}
-// 			} else {
-// 				// return fmt.Errorf("failed to query cast %s: %w", castName, err)
-// 				return err
-// 			}
-// 		}
-
-// 		// Link cast to movie
-// 		_, err = r.db.Exec(
-// 			ctx,
-// 			`INSERT INTO movie_casts (movie_id, cast_id) VALUES ($1, $2)`,
-// 			movieId,
-// 			castID,
-// 		)
-// 		if err != nil {
-// 			var pgErr *pgconn.PgError
-// 			if errors.As(err, &pgErr) {
-// 				if pgErr.Code == "23505" {
-// 					continue
-// 				}
-// 			}
-// 			return err
-// 		}
-// 	}
-
-// 	// check director if exist, and insert if itsn't
-// 	for _, directorName := range dataMovie.Directors {
-// 		var directorID int
-
-// 		// Check if director exists
-// 		err := r.db.QueryRow(ctx, `SELECT id FROM directors WHERE name = $1 LIMIT 1`, directorName).Scan(&directorID)
-
-// 		if err != nil {
-// 			if errors.Is(err, pgx.ErrNoRows) {
-// 				// Insert new director
-// 				err = r.db.QueryRow(
-// 					ctx,
-// 					`INSERT INTO directors (name) VALUES ($1) RETURNING id`,
-// 					directorName,
-// 				).Scan(&directorID)
-
-// 				if err != nil {
-// 					return fmt.Errorf("failed to insert director %s: %w", directorName, err)
-// 				}
-// 			} else {
-// 				return fmt.Errorf("failed to query director %s: %w", directorName, err)
-// 			}
-// 		}
-
-// 		// Link director to movie
-// 		_, err = r.db.Exec(
-// 			ctx,
-// 			`INSERT INTO movie_directors (movie_id, director_id) VALUES ($1, $2)`,
-// 			movieId,
-// 			directorID,
-// 		)
-// 		if err != nil {
-// 			var pgErr *pgconn.PgError
-// 			if errors.As(err, &pgErr) {
-// 				if pgErr.Code == "23505" {
-// 					log.Printf("Director %s already linked to movie %d", directorName, movieId)
-// 					continue
-// 				}
-// 			}
-// 			return fmt.Errorf("failed to link director to movie: %w", err)
-// 		}
-// 	}
-
-// 	querySchedule := `INSERT INTO schedules (movie_id, cinema_id, show_time, price, date) VALUES ($1, $2, $3, $4, $5)`
-// 	scheduleValues := []any{movieId, dataMovie.Cinema, dataMovie.ScreenTime, dataMovie.Price, dataMovie.Date}
-// 	_, err := r.db.Exec(ctx, querySchedule, scheduleValues...)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	return nil
-// }
 
 // InvalidateCache clears relevant movie caches
 func (r *MoviesRepository) InvalidateCache(ctx context.Context) error {
