@@ -29,18 +29,13 @@ type UpcomingMovie struct {
 }
 
 type DetailMovieStruct struct {
-	ID    int    `json:"id" DB:"id"`
-	Title string `json:"title" DB:"title" form:"title"`
-	// PosterPath  string    `json:"posterPath"`
+	ID          int       `json:"id" DB:"id"`
+	Title       string    `json:"title,binding:required" DB:"title" form:"title"`
 	Genres      []string  `json:"genres" DB:"genres" form:"genres"`
 	Synopsis    string    `json:"synopsis" DB:"synopsis" form:"synopsis"`
 	Duration    int       `json:"duration" DB:"duration" form:"duration"`
 	Casts       []string  `json:"casts" DB:"casts" form:"casts"`
 	Directors   []string  `json:"directors" DB:"directors" form:"directors"`
-	Cinema      int       `json:"cinema" DB:"cinema" form:"cinema"`
-	ScreenTime  int       `json:"screenTime" DB:"screenTime" form:"screenTime"`
-	Date        int       `json:"date" DB:"date" form:"date"`
-	Price       float64   `json:"price" DB:"price" form:"price"`
 	ReleaseDate time.Time `json:"release_date" DB:"release_date" form:"release"`
 	CreatedAt   time.Time `json:"created_at" DB:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" DB:"updated_at"`
@@ -55,8 +50,8 @@ type MovieForm struct {
 
 type Movie struct {
 	DetailMovieStruct
-	Poster   string `json:"poster"`
-	Backdrop string `json:"backdrop"`
+	Poster   *string `json:"poster"`
+	Backdrop *string `json:"backdrop"`
 }
 
 type MoviesResponse struct {
@@ -69,4 +64,14 @@ type ShowMovie struct {
 	Title  string   `json:"title"`
 	Genres []string `json:"genres"`
 	Image  *string  `json:"image"`
+}
+
+type Schedules struct {
+	MovieName int     `json:"movie_name" form:"movie_name"`
+	Cinema    int     `json:"cinema" DB:"cinema" form:"cinema"`
+	Location  string  `json:"location"`
+	City      string  `json:"city"`
+	ShowTime  int     `json:"show_time" DB:"show_time" form:"show_time"`
+	Date      int     `json:"date" DB:"date" form:"date"`
+	Price     float64 `json:"price" DB:"price" form:"price"`
 }
