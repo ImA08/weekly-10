@@ -148,6 +148,55 @@ func (r *MoviesRepository) GetAllMovies(ctx context.Context, movie models.ShowMo
 	return movies, nil
 }
 
+func (r *MoviesRepository) GetMovieDetailRepo(ctx context.Context, movieId int) (models.Movie, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return models.Movie{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	query := `SELECT 
+	m.id, 
+    m.title, 
+    ARRAY_AGG(DISTINCT g.genre) AS genres, 
+    m.synopsis, 
+    m.duration,
+    ARRAY_AGG(DISTINCT c.name) AS cast_names,     
+    m.release_date,
+    m.poster_path,
+    m.backdrop_path
+	FROM     
+		movies m 
+	JOIN 
+		movie_casts mc ON mc.movie_id = m.id
+	JOIN 
+		casts c ON mc.cast_id = c.id
+	LEFT JOIN
+		movie_genres mg ON mg.movie_id = m.id
+	LEFT JOIN
+		genres g ON mg.genre_id = g.id
+	WHERE
+		m.id = $1
+	GROUP BY
+		m.id, m.title, m.synopsis, m.duration, 
+    m.release_date, m.poster_path, m.backdrop_path`
+
+	var movieDetails models.Movie
+	values := []any{movieId}
+
+	err = tx.QueryRow(ctx, query, values...).Scan(&movieDetails.ID, &movieDetails.Title, &movieDetails.Genres, &movieDetails.Synopsis, &movieDetails.Duration, &movieDetails.Casts, &movieDetails.ReleaseDate, &movieDetails.Poster, &movieDetails.Backdrop)
+	if err != nil {
+		return models.Movie{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return models.Movie{}, err
+	}
+
+	return movieDetails, nil
+
+}
+
 func (r *MoviesRepository) UpcomingMovies(ctx context.Context) ([]models.UpcomingMovie, error) {
 	// 1. Try getting from Redis first
 	cached, err := r.rdb.Get(ctx, CacheKeyUpcomingMovies).Result()
@@ -233,17 +282,16 @@ func (r *MoviesRepository) AddMovies(ctx context.Context, dataMovie models.Movie
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx) // Safe rollback if not committed
+	defer tx.Rollback(ctx)
 
 	// Insert movie
+	query := `INSERT INTO movies (title, synopsis, duration, release_date, poster_path, backdrop_path)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+
+	values := []any{dataMovie.Title, dataMovie.Synopsis, dataMovie.Duration,
+		dataMovie.ReleaseDate, posterPath, backdropPath}
 	var movieId int
-	err = tx.QueryRow(
-		ctx,
-		`INSERT INTO movies (title, synopsis, duration, release_date, poster_path, backdrop_path)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		dataMovie.Title, dataMovie.Synopsis, dataMovie.Duration,
-		dataMovie.ReleaseDate, posterPath, backdropPath,
-	).Scan(&movieId)
+	err = tx.QueryRow(ctx, query, values...).Scan(&movieId)
 	if err != nil {
 		return fmt.Errorf("failed to insert movie: %w", err)
 	}
@@ -280,7 +328,7 @@ func (r *MoviesRepository) AddMovies(ctx context.Context, dataMovie models.Movie
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				continue // Skip duplicate cast-movie links
+				continue
 			}
 			return fmt.Errorf("failed to link cast to movie: %w", err)
 		}
@@ -300,7 +348,7 @@ func (r *MoviesRepository) AddMovies(ctx context.Context, dataMovie models.Movie
 				err = tx.QueryRow(
 					ctx,
 					`INSERT INTO directors (name) VALUES ($1) RETURNING id`,
-					directorName, // Fixed typo from 'directorName'
+					directorName,
 				).Scan(&directorID)
 				if err != nil {
 					return fmt.Errorf("failed to insert director %s: %w", directorName, err)
@@ -323,18 +371,6 @@ func (r *MoviesRepository) AddMovies(ctx context.Context, dataMovie models.Movie
 			}
 			return fmt.Errorf("failed to link director to movie: %w", err)
 		}
-	}
-
-	// Insert schedule
-	_, err = tx.Exec(
-		ctx,
-		`INSERT INTO schedules (movie_id, cinema_id, show_time, price, date) 
-         VALUES ($1, $2, $3, $4, $5)`,
-		movieId, dataMovie.Cinema, dataMovie.ScreenTime,
-		dataMovie.Price, dataMovie.Date,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to insert schedule: %w", err)
 	}
 
 	// Commit transaction if everything succeeded
