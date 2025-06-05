@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"mime/multipart"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"minitask1.go/internal/models"
 	"minitask1.go/internal/repositories"
 )
@@ -20,6 +22,45 @@ type MovieHandler struct {
 
 func NewMovieHandler(movieRepo *repositories.MoviesRepository) *MovieHandler {
 	return &MovieHandler{movieRepo: movieRepo}
+}
+
+func (h *MovieHandler) GetMoviesDetail(ctx *gin.Context) {
+	id := ctx.Param("id")
+
+	if id == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "movie ID is required",
+		})
+		return
+	}
+
+	idInt, err := strconv.Atoi(id)
+	if err != nil || idInt <= 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "invalid movie ID format",
+		})
+		return
+	}
+
+	result, err := h.movieRepo.GetMovieDetailRepo(ctx, idInt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			ctx.JSON(http.StatusNotFound, gin.H{
+				"message": "movie not found",
+			})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "success",
+		"data":    result,
+	})
+
 }
 
 func (h *MovieHandler) GetMovies(ctx *gin.Context) {
@@ -119,7 +160,7 @@ func (h *MovieHandler) AddMovieHandler(ctx *gin.Context) {
 	}
 
 	if formBody.Backdrop != nil {
-		backdropFilename, backdropFilePath, err := h.handleFileUpload(ctx, formBody.Poster)
+		backdropFilename, backdropFilePath, err := h.handleFileUpload(ctx, formBody.Backdrop)
 		if err != nil {
 			log.Printf("File upload error: %v", err)
 			ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -128,7 +169,7 @@ func (h *MovieHandler) AddMovieHandler(ctx *gin.Context) {
 			return
 		}
 		log.Println(backdropFilename)
-		posterURL = backdropFilePath
+		BackdropURL = backdropFilePath
 	}
 
 	err := h.movieRepo.AddMovies(ctx.Request.Context(), formBody, posterURL, BackdropURL)
