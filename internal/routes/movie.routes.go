@@ -15,7 +15,14 @@ func AddMovieRoutes(router *gin.Engine, db *pgxpool.Pool, mdw *middleware.Middle
 
 	movieGroup := router.Group("/movies")
 	{
+		// movieGroup.GET("", mdw.VerifyToken, mdw.AccessGate("user"), movieHandler.GetMovies)
 		movieGroup.GET("", movieHandler.GetMovies)
-		movieGroup.GET("/upcoming", mdw.VerifyToken, mdw.AccessGate("user"), movieHandler.GetUpcomingMovies)
+		movieGroup.GET("/:id", movieHandler.GetMoviesDetail)
+		movieGroup.GET("/upcoming", movieHandler.GetUpcomingMovies)
+	}
+
+	adminGroup := router.Group("/admin")
+	{
+		adminGroup.POST("/movies", movieHandler.AddMovieHandler)
 	}
 }
