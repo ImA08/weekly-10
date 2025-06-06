@@ -24,6 +24,7 @@ func InitRouter(db *pgxpool.Pool, rdb *redis.Client) *gin.Engine {
 	AddMovieRoutes(router, db, middleware, rdb)
 	AddProfileRoutes(router, db, middleware, rdb)
 	AddOrderRoutes(router, db, middleware)
+	AddScheduleRoutes(router, db, rdb, middleware)
 
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFile.Handler))
 
