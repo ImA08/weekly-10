@@ -7,10 +7,21 @@ import (
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"minitask1.go/internal/models"
 )
 
-func (r *MoviesRepository) GetScheduleMovieRepo(ctx context.Context, movieId int) ([]models.Schedules, error) {
+type ScheduleRepository struct {
+	db  *pgxpool.Pool
+	rdb *redis.Client
+}
+
+func NewScheduleRepository(db *pgxpool.Pool, rdb *redis.Client) *ScheduleRepository {
+	return &ScheduleRepository{db: db, rdb: rdb}
+}
+
+func (r *ScheduleRepository) GetScheduleMovieRepo(ctx context.Context, movieId int) ([]models.Schedules, error) {
 	cacheKey := fmt.Sprintf("movie:%d:schedules", movieId)
 
 	if cached, err := r.rdb.Get(ctx, cacheKey).Result(); err == nil {
