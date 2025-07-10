@@ -8,7 +8,7 @@ import (
 
 func addUserRouter(router *gin.Engine, userRepo *repositories.UserRepository) {
 
-	userHandler := handlers.NewUserHandler(userRepo)
+	userHandler := handlers.NewAuthHandler(userRepo)
 	authRouter := router.Group("/auth")
 
 	{

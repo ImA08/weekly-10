@@ -13,5 +13,8 @@ func AddScheduleRoutes(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client, 
 	scheduleRepo := repositories.NewScheduleRepository(db, rdb)
 	scheduleHandler := handlers.NewScheduleHandler(scheduleRepo)
 
-	router.GET("/tickets/:id", scheduleHandler.GetScheduleHandler)
+	scheduleGroup := router.Group("/schedules")
+
+	scheduleGroup.GET("/:id", scheduleHandler.GetScheduleHandler)
+	scheduleGroup.POST("", scheduleHandler.CreateScheduleHandler)
 }

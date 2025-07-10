@@ -81,3 +81,22 @@ func (r *ScheduleRepository) GetScheduleMovieRepo(ctx context.Context, movieId i
 
 	return schedules, nil
 }
+
+func (r *ScheduleRepository) CreateScheduleRepo(ctx context.Context, schedule models.ScheduleRequest) (int, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	query := `INSERT INTO cinemas (movie_id, cinema_id, show_time, price, date) VALUES ($1, $2, $3, $4, $5) RETURNING id`
+
+	values := []any{schedule.MovieId, schedule.CinemaId, schedule.ShowTime, schedule.Price, schedule.Date}
+	var scheduleId int
+	err = tx.QueryRow(ctx, query, values...).Scan(scheduleId)
+	if err != nil {
+		return 0, nil
+	}
+
+	return scheduleId, nil
+}

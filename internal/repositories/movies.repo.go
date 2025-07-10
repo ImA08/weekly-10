@@ -158,7 +158,8 @@ func (r *MoviesRepository) GetMovieDetailRepo(ctx context.Context, movieId int) 
 	query := `SELECT 
 	m.id, 
     m.title, 
-    ARRAY_AGG(DISTINCT g.genre) AS genres, 
+    ARRAY_AGG(DISTINCT g.genre) AS genres,
+    ARRAY_AGG(DISTINCT d.name) AS directors, 
     m.synopsis, 
     m.duration,
     ARRAY_AGG(DISTINCT c.name) AS cast_names,     
@@ -171,6 +172,10 @@ func (r *MoviesRepository) GetMovieDetailRepo(ctx context.Context, movieId int) 
 		movie_casts mc ON mc.movie_id = m.id
 	JOIN 
 		casts c ON mc.cast_id = c.id
+	JOIN 
+		movie_directors md ON md.movie_id = m.id
+	JOIN 
+		directors d ON md.director_id = d.id
 	LEFT JOIN
 		movie_genres mg ON mg.movie_id = m.id
 	LEFT JOIN
@@ -184,7 +189,7 @@ func (r *MoviesRepository) GetMovieDetailRepo(ctx context.Context, movieId int) 
 	var movieDetails models.Movie
 	values := []any{movieId}
 
-	err = tx.QueryRow(ctx, query, values...).Scan(&movieDetails.ID, &movieDetails.Title, &movieDetails.Genres, &movieDetails.Synopsis, &movieDetails.Duration, &movieDetails.Casts, &movieDetails.ReleaseDate, &movieDetails.Poster, &movieDetails.Backdrop)
+	err = tx.QueryRow(ctx, query, values...).Scan(&movieDetails.ID, &movieDetails.Title, &movieDetails.Genres, &movieDetails.Directors, &movieDetails.Synopsis, &movieDetails.Duration, &movieDetails.Casts, &movieDetails.ReleaseDate, &movieDetails.Poster, &movieDetails.Backdrop)
 	if err != nil {
 		return models.Movie{}, err
 	}

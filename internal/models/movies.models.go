@@ -65,13 +65,3 @@ type ShowMovie struct {
 	Genres []string `json:"genres"`
 	Image  *string  `json:"image"`
 }
-
-type Schedules struct {
-	MovieName string     `json:"movie_name" form:"movie_name"`
-	Cinema    string     `json:"cinema" DB:"cinema" form:"cinema"`
-	Location  string     `json:"location"`
-	City      string     `json:"city"`
-	ShowTime  *time.Time `json:"show_time" DB:"show_time" form:"show_time"`
-	Date      *time.Time `json:"date" DB:"date" form:"date"`
-	Price     float64    `json:"price" DB:"price" form:"price"`
-}

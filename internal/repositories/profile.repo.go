@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"minitask1.go/internal/models"
@@ -17,31 +18,35 @@ func NewProfileRepository(db *pgxpool.Pool) *ProfileRepository {
 }
 
 func (p *ProfileRepository) UpdateUserProfile(ctx context.Context, userID int, profile models.ProfileUserForm, filepath string) (models.Profile, error) {
-
 	query := `UPDATE profiles SET `
 	values := []any{}
+	updates := []string{}
+
 	if profile.FirstName != "" {
-		query += fmt.Sprintf(`first_name = $%d,`, len(values)+1)
+		updates = append(updates, fmt.Sprintf(`first_name = $%d`, len(values)+1))
 		values = append(values, profile.FirstName)
 	}
 
 	if profile.LastName != "" {
-		query += fmt.Sprintf(`last_name = $%d,`, len(values)+1)
+		updates = append(updates, fmt.Sprintf(`last_name = $%d`, len(values)+1))
 		values = append(values, profile.LastName)
 	}
 
 	if profile.PhoneNumber != "" {
-		query += fmt.Sprintf(`phone_number = $%d,`, len(values)+1)
+		updates = append(updates, fmt.Sprintf(`phone_number = $%d`, len(values)+1))
 		values = append(values, profile.PhoneNumber)
 	}
 
 	if filepath != "" {
-		// if len(values) > 0 {
-		// 	query += `, `
-		// }
-		query += fmt.Sprintf(`profile_picture = $%d`, len(values)+1)
+		updates = append(updates, fmt.Sprintf(`profile_picture = $%d`, len(values)+1))
 		values = append(values, filepath)
 	}
+
+	if len(updates) == 0 {
+		return models.Profile{}, fmt.Errorf("no fields to update")
+	}
+
+	query += strings.Join(updates, ", ")
 	query += fmt.Sprintf(" WHERE user_id = $%d", len(values)+1)
 	values = append(values, userID)
 
